@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Upload file to S3</title>
+    <script src="https://unpkg.com/vue"></script>
+    <script src="https://unpkg.com/axios@0.2.1/dist/axios.min.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <h1>S3 Uploader Test</h1>
+  
+      <div v-if="!image">
+        <h2>Select an image</h2>
+        <input type="file" @change="onFileChange">
+      </div>
+      <div v-else>
+        <img :src="image" />
+        <button v-if="!uploadURL" @click="removeImage">Remove image</button>
+        <button v-if="!uploadURL" @click="uploadImage">Upload image</button>
+      </div>
+      <h2 v-if="uploadURL">Success! Image uploaded to bucket.</h2>
+    </div>
+  
+    <script>
+      const MAX_IMAGE_SIZE = 1000000
+
+      /* ENTER YOUR ENDPOINT HERE */
+
+      const API_ENDPOINT = '<< ENTER HERE >>' // e.g. https://ab1234ab123.execute-api.us-east-1.amazonaws.com/uploads
+
+      new Vue({
+        el: "#app",
+        data: {
+          image: '',
+          uploadURL: ''
+        },
+        methods: {
+          onFileChange (e) {
+            let files = e.target.files || e.dataTransfer.files
+            if (!files.length) return
+            this.createImage(files[0])
+          },
+          createImage (file) {
+            // var image = new Image()
+            let reader = new FileReader()
+            reader.onload = (e) => {
+              console.log('length: ', e.target.result.includes('data:image/jpeg'))
+              if (!e.target.result.includes('data:image/jpeg')) {
+                return alert('Wrong file type - JPG only.')
+              }
+              if (e.target.result.length > MAX_IMAGE_SIZE) {
+                return alert('Image is loo large.')
+              }
+              this.image = e.target.result
+            }
+            reader.readAsDataURL(file)
+          },
+          removeImage: function (e) {
+            console.log('Remove clicked')
+            this.image = ''
+          },
+          uploadImage: async function (e) {
+            console.log('Upload clicked')
+            // Get the presigned URL
+            const response = await axios({
+              method: 'GET',
+              url: API_ENDPOINT
+            })
+            console.log('Response: ', response)
+            console.log('Uploading: ', this.image)
+            let binary = atob(this.image.split(',')[1])
+            let array = []
+            for (var i = 0; i < binary.length; i++) {
+              array.push(binary.charCodeAt(i))
+            }
+            let blobData = new Blob([new Uint8Array(array)], {type: 'image/jpeg'})
+            console.log('Uploading to: ', response.uploadURL)
+            const result = await fetch(response.uploadURL, {
+              method: 'PUT',
+              body: blobData
+            })
+            console.log('Result: ', result)
+            // Final URL for the user doesn't need the query string params
+            this.uploadURL = response.uploadURL.split('?')[0]
+          }
+        }
+      })
+    </script>
+    <style type="text/css">
+      body {
+        background: #20262E;
+        padding: 20px;
+        font-family: sans-serif;
+      }
+      #app {
+        background: #fff;
+        border-radius: 4px;
+        padding: 20px;
+        transition: all 0.2s;
+        text-align: center;
+      }
+      #logo {
+        width: 100px;
+      }
+      h2 {
+        font-weight: bold;
+        margin-bottom: 15px;
+      }
+      h1, h2 {
+        font-weight: normal;
+        margin-bottom: 15px;
+      }
+      a {
+        color: #42b983;
+      }
+      img {
+        width: 30%;
+        margin: auto;
+        display: block;
+        margin-bottom: 10px;
+      }
+    </style>
+  </body>
+</html>

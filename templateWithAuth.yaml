@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: S3 Uploader - sample application
+
+Parameters:
+  Auth0issuer:
+    Type: String
+    Description: The issuer URL from your Auth0 account.
+    Default: https://dev-abcdefg.auth0.com/
+
+Globals:
+  Function:
+    Timeout: 5
+    Runtime: nodejs12.x
+    Tags:
+      Application: HappyPath
+
+Resources:
+  # HTTP API
+  MyApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # HTTP API authorizer - see https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-httpapi-httpapiauth.html
+      # Auth:
+      #   Authorizers:
+      #     MyAuthorizer:
+      #       JwtConfiguration:
+      #         issuer: !Ref Auth0issuer
+      #         audience:
+      #           - https://auth0-jwt-authorizer
+      #       IdentitySource: "$request.header.Authorization"
+      #   DefaultAuthorizer: MyAuthorizer
+
+      # CORS configuration - this is open for development only and should be restricted in prod.
+      # See https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-httpapi-httpapicorsconfiguration.html   
+      CorsConfiguration:
+        AllowMethods:
+          - GET
+          - POST
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - "*"   
+        AllowOrigins: 
+          - "*"      
+
+  ## Lambda functions
+  UploadRequestFunction:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: upload/
+      Handler: request.handler
+      Runtime: nodejs12.x
+      MemorySize: 128
+      Environment:
+        Variables:
+          UploadBucket: !Ref S3UploadBucketName  
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref S3UploadBucketName         
+      Events:
+        UploadAssetAPI:
+          Type: HttpApi
+          Properties:
+            Path: /uploads
+            Method: get
+            ApiId: !Ref MyApi  
+
+  ## S3 bucket
+  S3UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      CorsConfiguration:
+        CorsRules:
+        - AllowedHeaders:
+            - "*"
+          AllowedMethods:
+            - GET
+            - PUT
+            - POST
+            - DELETE
+            - HEAD
+          AllowedOrigins:
+            - "*"
+
+## Take a note of the outputs for deploying the workflow templates in this sample application
+Outputs:
+  APIendpoint:
+    Description: "HTTP API endpoint URL"
+    Value: !Sub "https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com"
+  S3UploadBucketName:
+    Description: "S3 bucket for application uploads"
+    Value: !Ref 'S3UploadBucket'    
+
