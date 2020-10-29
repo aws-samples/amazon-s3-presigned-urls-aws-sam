@@ -41,6 +41,10 @@ When prompted for parameters, enter:
 
 This takes several minutes to deploy. At the end of the deployment, note the output values, as you need these later.
 
+- The APIendpoint value is important - it looks like https://ab123345677.execute-api.us-west-2.amazonaws.com.
+- **The upload URL is your endpoint** with the /uploads route added - for example: https://ab123345677.execute-api.us-west-2.amazonaws.com/uploads.
+
+
 ### Testing with the frontend application
 
 The frontend code is saved in the `frontend` subdirectory. 
