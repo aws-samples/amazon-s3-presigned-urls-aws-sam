@@ -12,8 +12,6 @@ Globals:
   Function:
     Timeout: 5
     Runtime: nodejs12.x
-    Tags:
-      Application: HappyPath
 
 Resources:
   # HTTP API
@@ -21,15 +19,15 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       # HTTP API authorizer - see https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-httpapi-httpapiauth.html
-      # Auth:
-      #   Authorizers:
-      #     MyAuthorizer:
-      #       JwtConfiguration:
-      #         issuer: !Ref Auth0issuer
-      #         audience:
-      #           - https://auth0-jwt-authorizer
-      #       IdentitySource: "$request.header.Authorization"
-      #   DefaultAuthorizer: MyAuthorizer
+      Auth:
+        Authorizers:
+          MyAuthorizer:
+            JwtConfiguration:
+              issuer: !Ref Auth0issuer
+              audience:
+                - https://auth0-jwt-authorizer
+            IdentitySource: "$request.header.Authorization"
+        DefaultAuthorizer: MyAuthorizer
 
       # CORS configuration - this is open for development only and should be restricted in prod.
       # See https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-httpapi-httpapicorsconfiguration.html   
