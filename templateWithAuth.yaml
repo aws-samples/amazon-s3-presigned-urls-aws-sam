@@ -42,7 +42,7 @@ Resources:
     # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Type: AWS::Serverless::Function 
     Properties:
-      CodeUri: upload/
+      CodeUri: getSignedURL/
       Handler: request.handler
       Runtime: nodejs12.x
       MemorySize: 128
