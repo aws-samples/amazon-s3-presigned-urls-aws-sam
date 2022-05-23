@@ -25,7 +25,7 @@ Resources:
         DefaultAuthorizer: MyAuthorizer
 
       # CORS configuration - this is open for development only and should be restricted in prod.
-      # See https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-httpapi-httpapicorsconfiguration.html   
+      # See https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-httpapi-httpapicorsconfiguration.html
       CorsConfiguration:
         AllowMethods:
           - GET
@@ -33,33 +33,33 @@ Resources:
           - DELETE
           - OPTIONS
         AllowHeaders:
-          - "*"   
-        AllowOrigins: 
-          - "*"      
+          - "*"
+        AllowOrigins:
+          - "*"
 
   ## Lambda functions
   UploadRequestFunction:
     # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Type: AWS::Serverless::Function 
+    Type: AWS::Serverless::Function
     Properties:
-      CodeUri: upload/
-      Handler: request.handler
+      CodeUri: getSignedURL/
+      Handler: app.handler
       Runtime: nodejs12.x
       MemorySize: 128
-      Timeout: 5      
+      Timeout: 5
       Environment:
         Variables:
-          UploadBucket: !Ref S3UploadBucketName  
+          UploadBucket: !Ref S3UploadBucket
       Policies:
         - S3CrudPolicy:
-            BucketName: !Ref S3UploadBucketName         
+            BucketName: !Ref S3UploadBucket
       Events:
         UploadAssetAPI:
           Type: HttpApi
           Properties:
             Path: /uploads
             Method: get
-            ApiId: !Ref MyApi  
+            ApiId: !Ref MyApi
 
   ## S3 bucket
   S3UploadBucket:
@@ -67,16 +67,16 @@ Resources:
     Properties:
       CorsConfiguration:
         CorsRules:
-        - AllowedHeaders:
-            - "*"
-          AllowedMethods:
-            - GET
-            - PUT
-            - POST
-            - DELETE
-            - HEAD
-          AllowedOrigins:
-            - "*"
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            AllowedOrigins:
+              - "*"
 
 ## Take a note of the outputs for deploying the workflow templates in this sample application
 Outputs:
@@ -85,5 +85,4 @@ Outputs:
     Value: !Sub "https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com"
   S3UploadBucketName:
     Description: "S3 bucket for application uploads"
-    Value: !Ref 'S3UploadBucket'    
-
+    Value: !Ref "S3UploadBucket"
