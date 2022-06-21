@@ -37,7 +37,7 @@ sam deploy --guided
 When prompted for parameters, enter:
 - Stack Name: s3Uploader
 - AWS Region: your preferred AWS Region (e.g. us-east-1)
-- Accept all other defaults.
+- Answer 'No' to `UploadRequestFunction may not have authorization defined, Is this okay?` question, and accept others defaults.
 
 This takes several minutes to deploy. At the end of the deployment, note the output values, as you need these later.
 
