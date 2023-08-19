@@ -32,25 +32,18 @@ exports.handler = async (event) => {
 
 const getUploadURL = async function(event) {
   const { searchParams } = new URL(`http://localhost/?${event.rawQueryString}`)
-  const carCid = searchParams.get('car')
-  const size = parseInt(searchParams.get('size'))
-  if (!carCid || !size) {
-    throw new Error('Missing car or size query parameter: ' + event.rawQueryString)
-  }
-  const cid = CID.parse(carCid)
-  const checksum = base64pad(cid.multihash.digest)
-  
-  const Key = `${carCid}.car`
+  const type = searchParams.get('type')
+  if (!type) { throw new Error('Missing type query parameter: ' + event.rawQueryString) } 
+  let s3Params
+  let Key
+  if (type === 'data') {
+     ({ s3Params, Key }) = carUploadParams(searchParams, event)
 
-  // Get signed URL from S3
-  const s3Params = {
-    Bucket: process.env.UploadBucket,
-    Key,
-    Expires: URL_EXPIRATION_SECONDS,
-    ContentType: 'application/car',
-    ChecksumSHA256: checksum,
-    ContentLength: size,
-    ACL: 'public-read'
+  } else if (type === 'meta') {
+     ({ s3Params, Key }) = metaUploadParams(searchParams, event)
+
+  } else {
+    throw new Error('Unsupported upload type: ' + type)
   }
 
   console.log('Params: ', s3Params)
@@ -60,4 +53,47 @@ const getUploadURL = async function(event) {
     uploadURL: uploadURL,
     Key
   })
+}
+
+function metaUploadParams(searchParams, event) {
+  const name = searchParams.get('name')
+  const branch = searchParams.get('branch')
+  if (!name || !branch) { throw new Error('Missing name or branch query parameter: ' + event.rawQueryString) }
+
+  // this need validation based on user id
+  const Key = `meta/${name}/${branch}.json`
+
+  const s3Params = {
+    Bucket: process.env.UploadBucket,
+    Key,
+    Expires: URL_EXPIRATION_SECONDS,
+    ContentType: 'application/json',
+    ACL: 'public-read'
+  }
+  return { s3Params, Key }
+}
+
+function carUploadParams(searchParams, event) {
+  const name = searchParams.get('name')
+  const carCid = searchParams.get('car')
+  const size = parseInt(searchParams.get('size'))
+  if (!carCid || !size || !name) {
+    throw new Error('Missing name, car or size query parameter: ' + event.rawQueryString)
+  }
+
+  const cid = CID.parse(carCid)
+  const checksum = base64pad(cid.multihash.digest)
+
+  const Key = `data/${name}/${carCid}.car`
+
+  const s3Params = {
+    Bucket: process.env.UploadBucket,
+    Key,
+    Expires: URL_EXPIRATION_SECONDS,
+    ContentType: 'application/car',
+    ChecksumSHA256: checksum,
+    ContentLength: size,
+    ACL: 'public-read'
+  }
+  return { s3Params, Key }
 }
