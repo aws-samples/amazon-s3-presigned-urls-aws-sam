@@ -10,6 +10,7 @@
   "author": "James Beswick, AWS Serverless",
   "license": "MIT-0",
   "devDependencies": {
-    "aws-sdk": "^2.749.0"
+    "aws-sdk": "^2.749.0",
+    "multiformats": "^12.0.1"
   }
 }

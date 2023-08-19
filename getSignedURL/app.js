@@ -16,6 +16,9 @@
 'use strict'
 
 const AWS = require('aws-sdk')
+const { CID } = require('multiformats/cid')
+const { base64pad } = require('multiformats/bases/base64')
+
 AWS.config.update({ region: process.env.AWS_REGION })
 const s3 = new AWS.S3()
 
@@ -28,19 +31,25 @@ exports.handler = async (event) => {
 }
 
 const getUploadURL = async function(event) {
-  const randomID = parseInt(Math.random() * 10000000)
-  const Key = `${randomID}.jpg`
+  const { searchParams } = new URL(`http://localhost/?${event.rawQueryString}`)
+  const carCid = searchParams.get('car')
+  const size = parseInt(searchParams.get('size'))
+  if (!carCid || !size) {
+    throw new Error('Missing car or size query parameter: ' + event.rawQueryString)
+  }
+  const cid = CID.parse(carCid)
+  const checksum = base64pad(cid.multihash.digest)
+  
+  const Key = `${carCid}.car`
 
   // Get signed URL from S3
   const s3Params = {
     Bucket: process.env.UploadBucket,
     Key,
     Expires: URL_EXPIRATION_SECONDS,
-    ContentType: 'image/jpeg',
-
-    // This ACL makes the uploaded object publicly readable. You must also uncomment
-    // the extra permission for the Lambda function in the SAM template.
-
+    ContentType: 'application/car',
+    ChecksumSHA256: checksum,
+    ContentLength: size,
     ACL: 'public-read'
   }
 
