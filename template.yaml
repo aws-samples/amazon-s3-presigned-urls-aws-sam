@@ -32,6 +32,7 @@ Resources:
       MemorySize: 128
       Environment:
         Variables:
+          NODE_OPTIONS: --enable-source-maps
           UploadBucket: !Ref S3UploadBucket  
       Policies:
         - S3WritePolicy:
@@ -50,6 +51,18 @@ Resources:
             Path: /uploads
             Method: get
             ApiId: !Ref MyApi  
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Minify: false
+        Target: "node16"
+        Sourcemap: true
+        EntryPoints: 
+          - app.ts
+        External:
+          - aws-sdk
+          
 
   ## S3 bucket
   S3UploadBucket:

@@ -14,11 +14,13 @@
 */
 
 'use strict'
+console.log('Loading function')
+import AWS from 'aws-sdk'
+import { CID } from 'multiformats'
+import { base64pad } from 'multiformats/bases/base64'
+console.log('config aws')
 
-const AWS = require('aws-sdk')
-const { CID } = require('multiformats/cid')
-const { base64pad } = require('multiformats/bases/base64')
-
+// @ts-ignore 
 AWS.config.update({ region: process.env.AWS_REGION })
 const s3 = new AWS.S3()
 
@@ -26,22 +28,24 @@ const s3 = new AWS.S3()
 const URL_EXPIRATION_SECONDS = 300
 
 // Main Lambda entry point
-exports.handler = async (event) => {
+export const handler = async event => {
   return await getUploadURL(event)
 }
 
-const getUploadURL = async function(event) {
+const getUploadURL = async function (event) {
   const { searchParams } = new URL(`http://localhost/?${event.rawQueryString}`)
   const type = searchParams.get('type')
-  if (!type) { throw new Error('Missing type query parameter: ' + event.rawQueryString) } 
+  const name = searchParams.get('name')
+  if (!type || !name) {
+    throw new Error('Missing name or type query parameter: ' + event.rawQueryString)
+  }
+
   let s3Params
-  let Key
+
   if (type === 'data') {
-     ({ s3Params, Key }) = carUploadParams(searchParams, event)
-
+    s3Params = carUploadParams(searchParams, event)
   } else if (type === 'meta') {
-     ({ s3Params, Key }) = metaUploadParams(searchParams, event)
-
+    s3Params = metaUploadParams(searchParams, event)
   } else {
     throw new Error('Unsupported upload type: ' + type)
   }
@@ -51,26 +55,29 @@ const getUploadURL = async function(event) {
 
   return JSON.stringify({
     uploadURL: uploadURL,
-    Key
+    Key: s3Params.Key
   })
 }
 
 function metaUploadParams(searchParams, event) {
   const name = searchParams.get('name')
   const branch = searchParams.get('branch')
-  if (!name || !branch) { throw new Error('Missing name or branch query parameter: ' + event.rawQueryString) }
+  if (!name || !branch) {
+    throw new Error('Missing name or branch query parameter: ' + event.rawQueryString)
+  }
 
   // this need validation based on user id
   const Key = `meta/${name}/${branch}.json`
 
   const s3Params = {
+    // @ts-ignore
     Bucket: process.env.UploadBucket,
     Key,
     Expires: URL_EXPIRATION_SECONDS,
     ContentType: 'application/json',
     ACL: 'public-read'
   }
-  return { s3Params, Key }
+  return s3Params
 }
 
 function carUploadParams(searchParams, event) {
@@ -82,11 +89,12 @@ function carUploadParams(searchParams, event) {
   }
 
   const cid = CID.parse(carCid)
-  const checksum = base64pad(cid.multihash.digest)
+  const checksum = base64pad.baseEncode(cid.multihash.digest)
 
-  const Key = `data/${name}/${carCid}.car`
+  const Key = `data/${name}/${cid.toString()}.car`
 
   const s3Params = {
+    // @ts-ignore
     Bucket: process.env.UploadBucket,
     Key,
     Expires: URL_EXPIRATION_SECONDS,
@@ -95,5 +103,5 @@ function carUploadParams(searchParams, event) {
     ContentLength: size,
     ACL: 'public-read'
   }
-  return { s3Params, Key }
+  return s3Params
 }
