@@ -83,9 +83,8 @@ function metaUploadParams(searchParams, event) {
 function carUploadParams(searchParams, event) {
   const name = searchParams.get('name')
   const carCid = searchParams.get('car')
-  const size = parseInt(searchParams.get('size'))
-  if (!carCid || !size || !name) {
-    throw new Error('Missing name, car or size query parameter: ' + event.rawQueryString)
+  if (!carCid || !name) {
+    throw new Error('Missing name or car query parameter: ' + event.rawQueryString)
   }
 
   const cid = CID.parse(carCid)
@@ -100,7 +99,6 @@ function carUploadParams(searchParams, event) {
     Expires: URL_EXPIRATION_SECONDS,
     ContentType: 'application/car',
     ChecksumSHA256: checksum,
-    ContentLength: size,
     ACL: 'public-read'
   }
   return s3Params
