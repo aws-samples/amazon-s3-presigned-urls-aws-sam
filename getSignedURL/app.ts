@@ -42,8 +42,8 @@ const getUploadURL = async function (event) {
 
   let s3Params
 
-  if (type === 'data') {
-    s3Params = carUploadParams(searchParams, event)
+  if (type === 'data' || type === 'file') {
+    s3Params = carUploadParams(searchParams, event, type)
   } else if (type === 'meta') {
     s3Params = metaUploadParams(searchParams, event)
   } else {
@@ -80,7 +80,7 @@ function metaUploadParams(searchParams, event) {
   return s3Params
 }
 
-function carUploadParams(searchParams, event) {
+function carUploadParams(searchParams, event, type: 'data' | 'file') {
   const name = searchParams.get('name')
   const carCid = searchParams.get('car')
   if (!carCid || !name) {
@@ -90,7 +90,7 @@ function carUploadParams(searchParams, event) {
   const cid = CID.parse(carCid)
   const checksum = base64pad.baseEncode(cid.multihash.digest)
 
-  const Key = `data/${name}/${cid.toString()}.car`
+  const Key = `${type}/${name}/${cid.toString()}.car`
 
   const s3Params = {
     // @ts-ignore
