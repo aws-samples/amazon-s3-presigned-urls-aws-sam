@@ -1,3 +1,16 @@
+# Fireproof S3 bucket adapter
+
+This uses verified uploads, addressed by content hash identifier.
+
+- User-agent pings a Lambda API with the intended hash identifier and size for the object they are about to upload.
+- Lambda returns a signed URL from an AWS account private key. The URL authorizes the holder to upload only the object matching content identifer (thanks to platform level hash validation in S3/R2/Azure).
+- The client PUTs to the URL and the content is written.
+- Subsequent reads for that content identifier will return the content, nothing invalid can overwrite it.
+
+Because the files Fireproof writes are encrypted by the browser, and the metadata is not stored in the bucket (but rather in your secure session storage) this bucket is safe for public reads.
+
+Read on to learn how to deploy, etc. This is based on...
+ 
 # S3 presigned URLs with SAM, auth and sample frontend
 
 This example application shows how to upload objects to S3 directly from your end-user application using Signed URLs.
