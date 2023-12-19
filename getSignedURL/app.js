@@ -36,12 +36,12 @@ const getUploadURL = async function(event) {
     Bucket: process.env.UploadBucket,
     Key,
     Expires: URL_EXPIRATION_SECONDS,
-    ContentType: 'image/jpeg',
+    ContentType: 'video',
 
     // This ACL makes the uploaded object publicly readable. You must also uncomment
     // the extra permission for the Lambda function in the SAM template.
 
-    // ACL: 'public-read'
+    ACL: 'public-read'
   }
 
   console.log('Params: ', s3Params)
