@@ -33,13 +33,12 @@ AWS.config.update({ region: process.env.AWS_REGION });
 const client = new DynamoDBClient({});
 const dynamo = DynamoDBDocumentClient.from(client);
 const tableName = "metaStore";
-
 const s3 = new AWS.S3({
   signatureVersion: "v4",
 });
 
 // Change this value to adjust the signed URL's expiration
-const URL_EXPIRATION_SECONDS = 172800;
+const URL_EXPIRATION_SECONDS = 300;
 
 // Main Lambda entry point
 export const handler = async (event) => {
