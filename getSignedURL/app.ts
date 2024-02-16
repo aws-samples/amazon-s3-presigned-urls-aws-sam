@@ -169,12 +169,10 @@ async function metaUploadParams(queryStringParameters, event) {
 }
 
 function carUploadParams(queryStringParameters, event, type) {
-  const name = queryStringParameters.name;
-  const carCid = queryStringParameters.car;
+  const name = queryStringParameters.name
+  const carCid = queryStringParameters.car
   if (!carCid || !name) {
-    throw new Error(
-      "Missing name or car query parameter: " + event.rawQueryString
-    )
+    throw new Error("Missing name or car query parameter: " + event.rawQueryString)
   }
 
   const cid = CID.parse(carCid)
