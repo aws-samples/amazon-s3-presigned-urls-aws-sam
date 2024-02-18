@@ -35,9 +35,9 @@ Resources:
           - DELETE
           - OPTIONS
         AllowHeaders:
-          - "*"
+          - '*'
         AllowOrigins:
-          - "*"
+          - '*'
 
   ## Lambda functions
   UploadRequestFunction:
@@ -60,7 +60,7 @@ Resources:
         ## for objects that will be publicly readable. Uncomment if you want this ACL.
         - Statement:
             - Effect: Allow
-              Resource: !Sub "arn:aws:s3:::${S3UploadBucket}/"
+              Resource: !Sub 'arn:aws:s3:::${S3UploadBucket}/'
               Action:
                 - s3:putObjectAcl
         - Statement:
@@ -91,7 +91,7 @@ Resources:
       BuildProperties:
         Format: cjs
         Minify: false
-        Target: "node18"
+        Target: 'node18'
         Sourcemap: true
         EntryPoints:
           - app.ts
@@ -111,19 +111,19 @@ Resources:
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
-              - "*"
+              - '*'
             AllowedMethods:
               - GET
               - PUT
               - HEAD
             AllowedOrigins:
-              - "*"
+              - '*'
 
 ## Take a note of the outputs for deploying the workflow templates in this sample application
 Outputs:
   APIendpoint:
-    Description: "HTTP API endpoint URL"
-    Value: !Sub "https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/uploads"
+    Description: 'HTTP API endpoint URL'
+    Value: !Sub 'https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/uploads'
   S3UploadBucketName:
-    Description: "S3 bucket for application uploads"
-    Value: !Ref "S3UploadBucket"
+    Description: 'S3 bucket for application uploads'
+    Value: !Ref 'S3UploadBucket'
