@@ -15,28 +15,49 @@
 */
 
 'use strict'
-console.log('Loading function')
 import AWS from 'aws-sdk'
 import { CID } from 'multiformats'
 import { base64pad } from 'multiformats/bases/base64'
-console.log('config aws')
+import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb'
+import {
+  DynamoDBDocumentClient,
+  ScanCommand,
+  PutCommand,
+  GetCommand,
+  DeleteCommand
+} from '@aws-sdk/lib-dynamodb'
 
-// @ts-ignore 
+// @ts-ignore
+// AWS.config.update({region: 'us-east-1'})
 AWS.config.update({ region: process.env.AWS_REGION })
-const s3 = new AWS.S3()
+const client = new DynamoDBClient({})
+const dynamo = DynamoDBDocumentClient.from(client)
+const tableName = 'metaStore'
+const s3 = new AWS.S3({
+  signatureVersion: 'v4'
+})
 
 // Change this value to adjust the signed URL's expiration
 const URL_EXPIRATION_SECONDS = 300
 
 // Main Lambda entry point
 export const handler = async event => {
-  return await getUploadURL(event)
+  return await getUploadURL(event).catch(error => {
+    console.error('Error:', error)
+    return {
+      status: 500,
+      body: JSON.stringify({
+        message: 'Internal Server Error',
+        error: error.message
+      })
+    }
+  })
 }
 
 const getUploadURL = async function (event) {
-  const { searchParams } = new URL(`http://localhost/?${event.rawQueryString}`)
-  const type = searchParams.get('type')
-  const name = searchParams.get('name')
+  const { queryStringParameters } = event
+  const type = queryStringParameters.type
+  const name = queryStringParameters.name
   if (!type || !name) {
     throw new Error('Missing name or type query parameter: ' + event.rawQueryString)
   }
@@ -44,46 +65,108 @@ const getUploadURL = async function (event) {
   let s3Params
 
   if (type === 'data' || type === 'file') {
-    s3Params = carUploadParams(searchParams, event, type)
+    s3Params = carUploadParams(queryStringParameters, event, type)
+    const uploadURL = await s3.getSignedUrlPromise('putObject', s3Params)
+
+    return JSON.stringify({
+      uploadURL: uploadURL,
+      Key: s3Params.Key
+    })
   } else if (type === 'meta') {
-    s3Params = metaUploadParams(searchParams, event)
+    return await metaUploadParams(queryStringParameters, event)
   } else {
     throw new Error('Unsupported upload type: ' + type)
   }
-
-  console.log('Params: ', s3Params)
-  const uploadURL = await s3.getSignedUrlPromise('putObject', s3Params)
-
-  return JSON.stringify({
-    uploadURL: uploadURL,
-    Key: s3Params.Key
-  })
 }
 
-function metaUploadParams(searchParams, event) {
-  const name = searchParams.get('name')
-  const branch = searchParams.get('branch')
-  if (!name || !branch) {
-    throw new Error('Missing name or branch query parameter: ' + event.rawQueryString)
-  }
+async function metaUploadParams(queryStringParameters, event) {
+  const name = queryStringParameters.name
+  const httpMethod = event.requestContext.http.method
+  if (httpMethod == 'PUT') {
+    const requestBody = JSON.parse(event.body)
+    if (requestBody) {
+      const { data, cid, parents } = requestBody
+      if (!data || !cid) {
+        throw new Error('Missing data or cid from the metadata:' + event.rawQueryString)
+      }
 
-  // this need validation based on user id
-  const Key = `meta/${name}/${branch}.json`
+      //name is the partition key and cid is the sort key for the DynamoDB table
+      await dynamo.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: {
+            name: name,
+            cid: cid,
+            data: data
+          }
+        })
+      )
 
-  const s3Params = {
-    // @ts-ignore
-    Bucket: process.env.UploadBucket,
-    Key,
-    Expires: URL_EXPIRATION_SECONDS,
-    ContentType: 'application/json',
-    ACL: 'public-read'
+      for (const p of parents) {
+        await dynamo.send(
+          new DeleteCommand({
+            TableName: tableName,
+            Key: {
+              name: name,
+              cid: p
+            }
+          })
+        )
+      }
+
+      return {
+        status: 201,
+        body: JSON.stringify({ message: 'Metadata has been added' })
+      }
+    } else {
+      return {
+        status: 400,
+        body: JSON.stringify({ message: 'JSON Payload data not found!' })
+      }
+    }
+  } else if (httpMethod === 'GET') {
+    const command = new QueryCommand({
+      ExpressionAttributeValues: {
+        ':v1': {
+          S: name
+        }
+      },
+      ExpressionAttributeNames: {
+        '#nameAttr': 'name',
+        '#dataAttr': 'data'
+      },
+      KeyConditionExpression: '#nameAttr = :v1',
+      ProjectionExpression: 'cid, #dataAttr',
+      TableName: tableName
+    })
+    const data = await dynamo.send(command)
+    // const data = await dynamoDB.scan(params).promise();
+    //This means items is an array of objects where each object contains a string key and a value of any type
+    //: { [key: string]: any; }[]
+    let items: { [key: string]: any }[] = []
+    if (data.Items && data.Items.length > 0) {
+      items = data.Items.map(item => AWS.DynamoDB.Converter.unmarshall(item))
+      return {
+        status: 200,
+        body: JSON.stringify({ items })
+      }
+    } else {
+      return {
+        status: 200,
+        body: JSON.stringify({ items: [] })
+      }
+    }
+  } else {
+    return {
+      status: 400,
+      body: JSON.stringify({ message: 'Invalid HTTP method' })
+    }
   }
-  return s3Params
 }
 
-function carUploadParams(searchParams, event, type: 'data' | 'file') {
-  const name = searchParams.get('name')
-  const carCid = searchParams.get('car')
+function carUploadParams(queryStringParameters, event, type) {
+  const name = queryStringParameters.name
+  const carCid = queryStringParameters.car
   if (!carCid || !name) {
     throw new Error('Missing name or car query parameter: ' + event.rawQueryString)
   }
