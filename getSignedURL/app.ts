@@ -107,22 +107,18 @@ async function invokelambda(event, tableName, dbname) {
 
   event.API_ENDPOINT = process.env.API_ENDPOINT;
   let str = dbname;
-  let extractedName = str.match(/\.([^.]+)\./)[1];
+  let extractedName = str.match(/\.([^.]+)\./)[1]
   event.databasename=extractedName;
 
   const params:InvocationRequest = {
     FunctionName: process.env.SendMessage as string,
     InvocationType: "RequestResponse",
     Payload: JSON.stringify(event),
-  };
-
-  try {
-    const data:any = await lambda.invoke(params).promise();
-    const result = JSON.parse(data.Payload);
-    return result;
-  } catch (error) {
-    throw error;
   }
+
+  const returnedresult:any = await lambda.invoke(params).promise();
+  const result = JSON.parse(returnedresult.Payload);
+  return result;
 }
 
 async function metaUploadParams(queryStringParameters, event) {
@@ -167,7 +163,7 @@ async function metaUploadParams(queryStringParameters, event) {
         console.log(error, "This is the error when calling other Lambda")
         return {
           statusCode: 500,
-          body: JSON.stringify({ error: "Failed to create invoice" }),
+          body: JSON.stringify({ error: "Failed to connected to websocket server" }),
         };
       }
 
