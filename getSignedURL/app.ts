@@ -42,7 +42,6 @@ const URL_EXPIRATION_SECONDS = 300
 
 // Main Lambda entry point
 export const handler = async event => {
-  console.log('Ok the function is being called')
   return await getUploadURL(event).catch(error => {
     console.error('Error:', error)
     return {
