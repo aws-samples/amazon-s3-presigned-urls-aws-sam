@@ -21,17 +21,17 @@ import { base64pad } from 'multiformats/bases/base64'
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb'
 import {
   DynamoDBDocumentClient,
-  ScanCommand,
   PutCommand,
-  GetCommand,
   DeleteCommand
 } from '@aws-sdk/lib-dynamodb'
+import { InvocationRequest } from 'aws-sdk/clients/lambda'
 
 // @ts-ignore
 // AWS.config.update({region: 'us-east-1'})
 AWS.config.update({ region: process.env.AWS_REGION })
 const client = new DynamoDBClient({})
 const dynamo = DynamoDBDocumentClient.from(client)
+const lambda = new AWS.Lambda()
 const tableName = 'metaStore'
 const s3 = new AWS.S3({
   signatureVersion: 'v4'
@@ -79,6 +79,48 @@ const getUploadURL = async function (event) {
   }
 }
 
+async function invokelambda(event, tableName, dbname) {
+  const command = new QueryCommand({
+    ExpressionAttributeValues: {
+      ":v1": {
+        S: dbname,
+      },
+    },
+    ExpressionAttributeNames: {
+      "#nameAttr": "name",
+      "#dataAttr": "data",
+    },
+    KeyConditionExpression: "#nameAttr = :v1",
+    ProjectionExpression: "cid, #dataAttr",
+    TableName: tableName,
+  });
+  const data = await dynamo.send(command)
+  let items:{ [key: string]: any; }[] = []
+  if (data.Items && data.Items.length > 0) {
+    items = data.Items.map((item) => AWS.DynamoDB.Converter.unmarshall(item));
+  }
+
+  event.body = JSON.stringify({
+    action: "sendmessage",
+    data: JSON.stringify({ items }),
+  });
+
+  event.API_ENDPOINT = process.env.API_ENDPOINT;
+  let str = dbname;
+  let extractedName = str.match(/\.([^.]+)\./)[1]
+  event.databasename=extractedName;
+
+  const params:InvocationRequest = {
+    FunctionName: process.env.SendMessage as string,
+    InvocationType: "RequestResponse",
+    Payload: JSON.stringify(event),
+  }
+
+  const returnedresult:any = await lambda.invoke(params).promise();
+  const result = JSON.parse(returnedresult.Payload);
+  return result;
+}
+
 async function metaUploadParams(queryStringParameters, event) {
   const name = queryStringParameters.name
   const httpMethod = event.requestContext.http.method
@@ -112,6 +154,17 @@ async function metaUploadParams(queryStringParameters, event) {
             }
           })
         )
+      }
+
+      try {
+        const result = await invokelambda(event, tableName, name)
+        console.log("This is the response", result)
+      } catch (error) {
+        console.log(error, "This is the error when calling other Lambda")
+        return {
+          statusCode: 500,
+          body: JSON.stringify({ error: "Failed to connected to websocket server" }),
+        };
       }
 
       return {
