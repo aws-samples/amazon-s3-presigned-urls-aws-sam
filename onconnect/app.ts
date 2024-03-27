@@ -16,13 +16,10 @@
 */
 "use strict";
 import AWS from "aws-sdk";
-import { DynamoDBClient, QueryCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
-  ScanCommand,
   PutCommand,
-  GetCommand,
-  DeleteCommand,
 } from "@aws-sdk/lib-dynamodb";
 
 AWS.config.update({ region: process.env.AWS_REGION });
@@ -44,10 +41,10 @@ export const handler = async (event) => {
 };
 
 async function addSubscribers(event) {
-  console.log("This is the route key", event.requestContext.routeKey);
+  // console.log("This is the route key", event.requestContext.routeKey);
   const { queryStringParameters } = event;
   const database = queryStringParameters.database;
-  console.log("This is the request context", event.requestContext);
+  // console.log("This is the request context", event.requestContext);
   try {
     await dynamo.send(
       new PutCommand({
@@ -59,7 +56,7 @@ async function addSubscribers(event) {
       })
     );
   } catch (err) {
-    console.log("This is the error", err);
+    console.log("Error adding subscriber", err);
     return {
       statusCode: 500,
       body: "Failed to connect: " + JSON.stringify(err),

@@ -19,9 +19,6 @@ import AWS from "aws-sdk";
 import { DynamoDBClient, QueryCommand } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
-  ScanCommand,
-  PutCommand,
-  GetCommand,
   DeleteCommand,
 } from "@aws-sdk/lib-dynamodb";
 
@@ -44,10 +41,10 @@ export const handler = async (event) => {
 };
 
 async function deleteSubscribers(event) {
-  console.log("This is the route key", event.requestContext.routeKey);
+  // console.log("This is the route key", event.requestContext.routeKey);
   // const { queryStringParameters } = event;
   // const database = queryStringParameters.database;
-  console.log("This is the request context", event.requestContext);
+  // console.log("This is the request context", event.requestContext);
   try {
     await dynamo.send(
       new DeleteCommand({
@@ -59,12 +56,12 @@ async function deleteSubscribers(event) {
       })
     );
   } catch (err) {
-    console.log("This is the error", err);
+    console.log("Error deleting susbcriber", err);
     return {
       statusCode: 500,
       body: "Failed to disconnect: " + JSON.stringify(err),
     };
   }
 
-  return { statusCode: 200, body: "DisConnected." };
+  return { statusCode: 200, body: "Disconnected." };
 }
