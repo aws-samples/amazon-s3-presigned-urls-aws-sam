@@ -3,13 +3,17 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "James Beswick, AWS Serverless",
   "license": "MIT-0",
-  "devDependencies": {
-    "aws-sdk": "^2.749.0"
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.515.0",
+    "@aws-sdk/lib-dynamodb": "^3.515.0",
+    "aws-sdk": "^2.749.0",
+    "multiformats": "^12.0.1"
   }
 }

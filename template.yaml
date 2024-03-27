@@ -1,77 +1,387 @@
 AWSTemplateFormatVersion: 2010-09-09
 Transform: AWS::Serverless-2016-10-31
 Description: S3 Uploader - sample application
+Parameters:
+  TableName:
+    Type: String
+    Default: "subscriberstable"
+    Description: (Required) The name of the new DynamoDB to store connection identifiers for each connected clients. Minimum 3 characters
+    MinLength: 3
+    MaxLength: 50
+    AllowedPattern: ^[A-Za-z_]+$
+    ConstraintDescription: "Required. Can be characters and underscore only. No numbers or special characters allowed."
 
 Resources:
+  SubscribersWebSocket:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: SubscribersWebSocket
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
+
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SubscribersWebSocket
+      RouteKey: $connect
+      AuthorizationType: NONE
+      OperationName: ConnectRoute
+      Target: !Join
+        - "/"
+        - - "integrations"
+          - !Ref ConnectInteg
+
+  ConnectInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SubscribersWebSocket
+      Description: Connect Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnConnectFunction.Arn}/invocations
+
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SubscribersWebSocket
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      OperationName: DisconnectRoute
+      Target: !Join
+        - "/"
+        - - "integrations"
+          - !Ref DisconnectInteg
+
+  DisconnectInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SubscribersWebSocket
+      Description: Disconnect Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectFunction.Arn}/invocations
+
+  SendRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SubscribersWebSocket
+      RouteKey: sendmessage
+      AuthorizationType: NONE
+      OperationName: SendRoute
+      Target: !Join
+        - "/"
+        - - "integrations"
+          - !Ref SendInteg
+
+  SendInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SubscribersWebSocket
+      Description: Send Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SendMessageFunction.Arn}/invocations
+
+  Deployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - ConnectRoute
+      - SendRoute
+      - DisconnectRoute
+    Properties:
+      ApiId: !Ref SubscribersWebSocket
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      StageName: Prod
+      Description: Prod Stage
+      DeploymentId: !Ref Deployment
+      ApiId: !Ref SubscribersWebSocket
+
+  ConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: connectionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: connectionId
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      SSESpecification:
+        SSEEnabled: True
+      TableName: !Ref TableName
+
+  OnConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: onconnect/
+      Handler: app.handler
+      MemorySize: 1024
+      Runtime: nodejs20.x
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TableName
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TableName
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Minify: false
+        Target: 'node20'
+        Sourcemap: true
+        EntryPoints:
+          - app.ts
+    
+
+  OnConnectPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - SubscribersWebSocket
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OnConnectFunction
+      Principal: apigateway.amazonaws.com
+
+  OnDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ondisconnect/
+      Handler: app.handler
+      MemorySize: 1024
+      Runtime: nodejs20.x
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TableName
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TableName
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Minify: false
+        Target: 'node20'
+        Sourcemap: true
+        EntryPoints:
+          - app.ts
+
+  OnDisconnectPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - SubscribersWebSocket
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OnDisconnectFunction
+      Principal: apigateway.amazonaws.com
+
+  SendMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: sendmessage/
+      Handler: app.handler
+      MemorySize: 1024
+      Runtime: nodejs20.x
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TableName
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - "execute-api:ManageConnections"
+              Resource:
+                - !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SubscribersWebSocket}/*"
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Minify: false
+        Target: 'node20'
+        Sourcemap: true
+        EntryPoints:
+          - app.ts
+
+  SendMessagePermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - SubscribersWebSocket
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SendMessageFunction
+      Principal: apigateway.amazonaws.com
+
+  MetaStoreTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: metaStore
+      AttributeDefinitions:
+        - AttributeName: name
+          AttributeType: S
+        - AttributeName: cid
+          AttributeType: S
+      KeySchema:
+        - AttributeName: name
+          KeyType: HASH
+        - AttributeName: cid
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
   # HTTP API
   MyApi:
     Type: AWS::Serverless::HttpApi
     Properties:
       # CORS configuration - this is open for development only and should be restricted in prod.
-      # See https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-httpapi-httpapicorsconfiguration.html   
+      # See https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-httpapi-httpapicorsconfiguration.html
       CorsConfiguration:
         AllowMethods:
           - GET
+          - PUT
           - POST
           - DELETE
           - OPTIONS
         AllowHeaders:
-          - "*"   
-        AllowOrigins: 
-          - "*"      
+          - '*'
+        AllowOrigins:
+          - '*'
 
   ## Lambda functions
   UploadRequestFunction:
     # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Type: AWS::Serverless::Function 
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: getSignedURL/
       Handler: app.handler
-      Runtime: nodejs16.x
+      Runtime: nodejs20.x
       Timeout: 3
-      MemorySize: 128
+      MemorySize: 1024
       Environment:
         Variables:
-          UploadBucket: !Ref S3UploadBucket  
+          NODE_OPTIONS: --enable-source-maps
+          UploadBucket: !Ref S3UploadBucket
+          SendMessage: !Ref SendMessageFunction
+          API_ENDPOINT:
+            !Join [
+              "",
+              [
+                !Ref SubscribersWebSocket,
+                ".execute-api.",
+                !Ref "AWS::Region",
+                ".amazonaws.com/",
+                !Ref "Stage",
+              ],
+            ]
       Policies:
         - S3WritePolicy:
             BucketName: !Ref S3UploadBucket
         ## This permission allows the Lambda function to request signed URLs
         ## for objects that will be publicly readable. Uncomment if you want this ACL.
-        # - Statement:
-        #   - Effect: Allow
-        #     Resource: !Sub 'arn:aws:s3:::${S3UploadBucket}/'
-        #     Action:
-        #       - s3:putObjectAcl
+        - Statement:
+            - Effect: Allow
+              Resource: !Sub 'arn:aws:s3:::${S3UploadBucket}/'
+              Action:
+                - s3:putObjectAcl
+        - Statement:
+            - Effect: Allow
+              Resource: !GetAtt MetaStoreTable.Arn
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:Query
+                - dynamodb:Scan
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+        - Statement:
+            - Effect: Allow
+              Resource: !GetAtt SendMessageFunction.Arn
+              Action:
+                - lambda:InvokeFunction
       Events:
-        UploadAssetAPI:
+        GetUploadAssetAPI:
           Type: HttpApi
           Properties:
             Path: /uploads
             Method: get
-            ApiId: !Ref MyApi  
+            ApiId: !Ref MyApi
+        PutUploadAssetAPI:
+          Type: HttpApi
+          Properties:
+            Path: /uploads
+            Method: put
+            ApiId: !Ref MyApi
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Minify: false
+        Target: 'node20'
+        Sourcemap: true
+        EntryPoints:
+          - app.ts
 
   ## S3 bucket
   S3UploadBucket:
     Type: AWS::S3::Bucket
     Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       CorsConfiguration:
         CorsRules:
-        - AllowedHeaders:
-            - "*"
-          AllowedMethods:
-            - GET
-            - PUT
-            - HEAD
-          AllowedOrigins:
-            - "*"
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - HEAD
+            AllowedOrigins:
+              - '*'
 
 ## Take a note of the outputs for deploying the workflow templates in this sample application
 Outputs:
   APIendpoint:
-    Description: "HTTP API endpoint URL"
-    Value: !Sub "https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com"
+    Description: 'HTTP API endpoint URL'
+    Value: !Sub 'https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/uploads'
   S3UploadBucketName:
-    Description: "S3 bucket for application uploads"
-    Value: !Ref 'S3UploadBucket'    
-
+    Description: 'S3 bucket for application uploads'
+    Value: !Ref 'S3UploadBucket'
+  ConnectionsTableArn:
+    Description: "Connections table ARN"
+    Value: !GetAtt ConnectionsTable.Arn
+  OnConnectFunctionArn:
+    Description: "OnConnect function ARN"
+    Value: !GetAtt OnConnectFunction.Arn
+  OnDisconnectFunctionArn:
+    Description: "OnDisconnect function ARN"
+    Value: !GetAtt OnDisconnectFunction.Arn
+  SendMessageFunctionArn:
+    Description: "SendMessage function ARN"
+    Value: !GetAtt SendMessageFunction.Arn
+  WebSocketURI:
+    Description: "The WSS Protocol URI to connect"
+    Value:
+      !Join [
+        "",
+        [
+          "wss://",
+          !Ref SubscribersWebSocket,
+          ".execute-api.",
+          !Ref "AWS::Region",
+          ".amazonaws.com/",
+          !Ref "Stage",
+        ],
+      ]
